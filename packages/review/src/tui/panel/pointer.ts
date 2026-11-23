@@ -91,6 +91,11 @@ export function createPointer(deps: PointerDeps): Pointer {
       )
       const at = drawn[row]
 
+      if (at?.gap && at.file) {
+        deps.actions.expand(at.file, at.gap)
+        return
+      }
+
       /** A heading: the buttons on its right, and folding everywhere else on it. */
       if (at?.header && at.file) {
         const columns = columnsFor(deps.viewport(), store.current().changes)

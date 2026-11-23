@@ -34,6 +34,7 @@ export const REVIEW_KEYS: readonly KeyLine[] = [
   { keys: ["x"], does: "Remove the thread here" },
   { keys: ["space", "m"], does: "Mark the file viewed and go to the next one that is not" },
   { keys: ["z"], does: "Fold or unfold the file" },
+  { keys: ["+", "-"], does: "Expand the nearest hidden context, or reset this file" },
   { keys: ["o"], does: "Open an image or other binary in your system's viewer — both versions" },
   { keys: ["s"], does: "Hand the review to the agent" },
   { keys: ["b"], does: "Next source: uncommitted work, or what this branch changes" },

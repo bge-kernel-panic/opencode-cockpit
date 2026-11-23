@@ -99,6 +99,7 @@ export interface Run {
 
 export interface Row {
   runs: Run[]
+  gap?: { start: number; end: number; above: boolean; below: boolean }
   /** Set on a row that is a line of the new file, so notes can attach to it. */
   line?: number
   /** The thing this row stands for — a path, a note id — so a click knows what it landed on. */

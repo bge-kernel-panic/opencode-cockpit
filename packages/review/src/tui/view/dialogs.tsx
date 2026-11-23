@@ -1,5 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import type { Host } from "@opencode-cockpit/client/host"
+import type { TextareaRenderable } from "@opentui/core"
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
+import { createSignal } from "solid-js"
 import type { BaseCandidate } from "../../core/git/changes.ts"
 import { type Thread, threadWhere } from "../../core/model/thread.ts"
 import { cardRows } from "../../core/view/card.ts"
@@ -70,12 +73,33 @@ export interface AskOptions {
   allowEmpty?: boolean
 }
 
+export function noteDialogLayout(terminalHeight: number, contextLines: number) {
+  const height = Math.max(3, Math.floor((terminalHeight * 2) / 3) - 2)
+  const editor = Math.max(1, Math.min(4, height - 2))
+  return { editor, context: Math.max(0, Math.min(contextLines, height - editor - 2)) }
+}
+
+export function noteContextPosition(start: number, visible: number, total: number): string {
+  if (visible >= total) return ""
+  return visible === 0 ? `[0/${total}] ` : `[${start + 1}-${start + visible}/${total}] `
+}
+
+export function noteDialogKey(event: {
+  name: string
+  ctrl: boolean
+}): "previous" | "next" | "newline" | "submit" | undefined {
+  if (event.name === "pageup") return "previous"
+  if (event.name === "pagedown") return "next"
+  if (
+    event.name === "linefeed" ||
+    (event.ctrl && (event.name === "j" || event.name === "return" || event.name === "enter"))
+  )
+    return "newline"
+  if (event.name === "return" || event.name === "enter") return "submit"
+}
+
 /**
  * Writing a note, or answering one.
- *
- * The host's own prompt dialog, rather than a text field of our own: it is the one surface OpenCode
- * focuses and re-renders without argument, it already handles editing and escape, and it looks like
- * everything else in the app. Shell reaches for the same thing for the same reason.
  *
  * **What is being answered is shown above the field.** The first version opened an empty box titled
  * "Reply", which is the same box you get for a new comment — so answering meant remembering what you
@@ -132,6 +156,7 @@ export function askForNote(
   }
 
   const context = (): Row[] => [
+    { runs: [{ text: description, tone: "muted" }] },
     ...quotedRows(),
     ...(thread ? cardRows(thread, { width: width(), height: 40 }, "current", { inline: true }) : []),
   ]
@@ -139,56 +164,96 @@ export function askForNote(
   const colour = (tone: Tone | undefined) => toneColour(theme(), tone)
   const behind = (fill: Fill | undefined) => fillColour(theme(), fill)
 
-  const rich = () => (
-    <box flexDirection="column">
-      <text>
-        <span style={{ fg: theme().textMuted }}>{description}</span>
-      </text>
-      {context().map((row) => (
-        <text wrapMode="none">
-          {row.runs.map((run) => (
-            <span
-              style={{
-                fg: colour(run.tone),
-                ...(behind(run.fill) ? { bg: behind(run.fill) } : {}),
-                ...(run.bold ? { bold: true } : {}),
-              }}
-            >
-              {run.text}
-            </span>
-          ))}
-        </text>
-      ))}
-    </box>
-  )
-  /** The same context in words, for a host whose prompt takes only text (OpenCode 2). */
-  const plain = [
-    description,
-    ...context().map((row) =>
-      row.runs
-        .map((run) => run.text)
-        .join("")
-        .trimEnd(),
-    ),
-  ]
-    .filter((line, index) => index === 0 || line.trim())
-    .join("\n")
+  const Dialog = () => {
+    const dimensions = useTerminalDimensions()
+    const rows = () => context()
+    const [offset, setOffset] = createSignal(thread ? Number.MAX_SAFE_INTEGER : 0)
+    const layout = () => noteDialogLayout(dimensions().height, rows().length)
+    const start = () => Math.max(0, Math.min(offset(), rows().length - layout().context))
+    let editor: TextareaRenderable | undefined
+    const submit = () => {
+      const text = editor?.plainText.trim() ?? ""
+      if (text || allowEmpty) {
+        onConfirm(text)
+        api.ui.dialog.clear()
+      }
+    }
+    const move = (direction: number) => {
+      setOffset(Math.max(0, start() + direction * Math.max(1, layout().context)))
+    }
 
-  void api.ui
-    .prompt({
-      title,
-      description: plain,
-      rich,
-      placeholder: "what should change, and why",
-      value: value ?? "",
+    api.keymap.useLayer(() => ({
+      priority: 100,
+      commands: [
+        { name: "cockpit.review.note.submit", title: "Submit note", run: () => editor?.submit() },
+        { name: "cockpit.review.note.newline", title: "Insert newline", run: () => editor?.insertText("\n") },
+        { name: "cockpit.review.note.previous", title: "Previous context page", run: () => move(-1) },
+        { name: "cockpit.review.note.next", title: "Next context page", run: () => move(1) },
+      ],
+      bindings: [
+        { key: "return", cmd: "cockpit.review.note.submit" },
+        { key: "ctrl+j,linefeed,ctrl+return", cmd: "cockpit.review.note.newline" },
+        { key: "pageup", cmd: "cockpit.review.note.previous" },
+        { key: "pagedown", cmd: "cockpit.review.note.next" },
+      ],
+    }))
+
+    useKeyboard((event) => {
+      const action = noteDialogKey(event)
+      if (!action) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (action === "previous" || action === "next") {
+        move(action === "previous" ? -1 : 1)
+      } else if (action === "newline") {
+        editor?.insertText("\n")
+      } else {
+        editor?.submit()
+      }
     })
-    .then((text) => {
-      /** However it closed, the keys come back. */
-      onClose?.()
-      if (text === undefined) return
-      const trimmed = text.trim()
-      if (trimmed || allowEmpty) onConfirm(trimmed)
-    })
+
+    return (
+      <box flexDirection="column">
+        <text fg={theme().text} wrapMode="none">
+          {noteContextPosition(start(), layout().context, rows().length)}
+          {title}
+        </text>
+        {rows()
+          .slice(start(), start() + layout().context)
+          .map((row) => (
+            <text wrapMode="none">
+              {row.runs.map((run) => (
+                <span
+                  style={{
+                    fg: colour(run.tone),
+                    ...(behind(run.fill) ? { bg: behind(run.fill) } : {}),
+                    ...(run.bold ? { bold: true } : {}),
+                  }}
+                >
+                  {run.text}
+                </span>
+              ))}
+            </text>
+          ))}
+        <textarea
+          ref={(ref) => {
+            editor = ref
+          }}
+          focused
+          height={layout().editor}
+          wrapMode="word"
+          initialValue={value ?? ""}
+          placeholder="what should change, and why"
+          onSubmit={submit}
+        />
+        <text fg={theme().textMuted} wrapMode="none">
+          Esc cancel · Enter send · ^J newline · PgUp/Dn
+        </text>
+      </box>
+    )
+  }
+  api.ui.dialog.replace(() => <Dialog />, onClose)
+  api.ui.dialog.setSize("xlarge")
 }
 
 /**

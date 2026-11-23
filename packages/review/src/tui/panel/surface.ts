@@ -11,7 +11,7 @@
  * otherwise would invite the exact bug the platform has already taught us twice.
  */
 
-import { emptyReview, type Review } from "../../core/model/review.ts"
+import { emptyReview, type FileChange, type Review } from "../../core/model/review.ts"
 import type { Variant } from "../../core/view/frame.ts"
 import type { ViewState } from "../../core/view/state.ts"
 
@@ -45,4 +45,19 @@ export function createSurface(variant: Variant): Surface {
     showStats: false,
     yielded: false,
   }
+}
+
+export function retainExpansion(
+  surface: Surface,
+  previous: readonly FileChange[],
+  next: readonly FileChange[],
+) {
+  const expanded = new Map(surface.view.expanded ?? [])
+  for (const [path] of expanded) {
+    const before = previous.find((file) => file.path === path)
+    const after = next.find((file) => file.path === path)
+    if (!before || !after || before.before !== after.before || before.after !== after.after)
+      expanded.delete(path)
+  }
+  surface.view = { ...surface.view, expanded }
 }

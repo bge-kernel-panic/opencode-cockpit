@@ -165,7 +165,7 @@ export function visibleDiffRows(
   review: Review,
   state: ViewState,
   viewport: Viewport,
-): { line?: number; target?: string; file?: string; header?: boolean }[] {
+): { line?: number; target?: string; file?: string; header?: boolean; gap?: Row["gap"] }[] {
   const width = streamWidth(viewport, changes)
   const body = Math.max(1, viewport.height - HEADER_ROWS - FOOTER_ROWS)
   return streamWindow(changes, review, state, width, body).map((row) => ({
@@ -173,5 +173,6 @@ export function visibleDiffRows(
     ...(row.target === undefined ? {} : { target: row.target }),
     ...(row.file === undefined ? {} : { file: row.file }),
     ...(row.header ? { header: true } : {}),
+    ...(row.gap ? { gap: row.gap } : {}),
   }))
 }

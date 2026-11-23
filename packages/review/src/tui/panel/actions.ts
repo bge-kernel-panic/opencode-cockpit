@@ -14,10 +14,12 @@
  */
 
 import type { Host } from "@opencode-cockpit/client/host"
+import { diffSections, type Gap } from "../../core/diff/hunks.ts"
 import type { Guard } from "../../core/guard.ts"
 import type { Source } from "../../core/model/review.ts"
 import { navigableRows } from "../../core/view/list.ts"
 import type { Viewport } from "../../core/view/state.ts"
+import { cursorRow, stopsOf, streamScroll } from "../../core/view/stream.ts"
 import { baseCandidates } from "../../io/git.ts"
 import type { Persistence } from "../../io/persist.ts"
 import type { Viewer } from "../../io/viewer.ts"
@@ -67,6 +69,8 @@ export interface Actions {
   scroll: (delta: number) => void
   /** The code sideways, by columns: negative is back towards the start of the lines. */
   pan: (delta: number) => void
+  expand: (path?: string, gap?: Gap) => void
+  resetContext: () => void
   swap: () => void
   enter: () => void
   toFiles: () => void
@@ -119,6 +123,77 @@ export function createActions(deps: ActionDeps): Actions {
     toggleFold,
     commentFile,
   } = threads
+
+  const changeExpansion = (path: string, expanded: ReadonlySet<number>) => {
+    const before = navigation.streamNow()
+    const width = navigation.width()
+    const row = cursorRow(before, surface.review, surface.view, width)
+    const scroll = streamScroll(before, surface.view, deps.listHeight())
+    const all = new Map(surface.view.expanded ?? [])
+    if (expanded.size) all.set(path, expanded)
+    else all.delete(path)
+    surface.view = { ...surface.view, expanded: all }
+    const after = navigation.streamNow()
+    let moved = false
+    if (expanded.size === 0 && path === surface.view.file) {
+      const segment = after.segments.find((item) => item.path === path)
+      const lines = segment
+        ? stopsOf(segment, surface.review, surface.view, width).filter(
+            (line): line is number => line !== undefined,
+          )
+        : []
+      const line = surface.view.line
+      const anchor = surface.view.anchor
+      if (line !== undefined && !lines.includes(line)) {
+        const nearest = lines.reduce<number | undefined>(
+          (best, candidate) =>
+            best === undefined ||
+            Math.abs(candidate - line) < Math.abs(best - line) ||
+            (Math.abs(candidate - line) === Math.abs(best - line) && candidate > best)
+              ? candidate
+              : best,
+          undefined,
+        )
+        surface.view = { ...surface.view, line: nearest, anchor: undefined }
+        moved = true
+      } else if (anchor !== undefined && !lines.includes(anchor)) {
+        surface.view = { ...surface.view, anchor: undefined }
+      }
+    }
+    const next = cursorRow(after, surface.review, surface.view, width)
+    if (row !== undefined && next !== undefined)
+      surface.view = { ...surface.view, scroll: Math.max(0, scroll + next - row) }
+    if (moved) navigation.follow()
+    draw()
+  }
+
+  const expand = (path = surface.view.file, selected?: Gap) => {
+    if (!path || (!selected && surface.view.pane !== "diff")) return
+    const file = store.current().changes.files.find((candidate) => candidate.path === path)
+    if (!file || file.binary) return
+    const expanded = new Set(surface.view.expanded?.get(path) ?? [])
+    const gaps = diffSections(file.before, file.after, {
+      context: surface.view.context ?? 3,
+      expanded,
+    }).filter((section): section is Gap => "start" in section)
+    const line = surface.view.line
+    const gap =
+      selected ??
+      (line === undefined
+        ? undefined
+        : gaps.sort((a, b) => {
+            const distance = (g: Gap) => (line < g.start ? g.start - line : line - g.end)
+            return distance(a) - distance(b) || b.start - a.start
+          })[0])
+    if (!gap) return
+    if (gap.above) for (let i = gap.start; i <= Math.min(gap.end, gap.start + 9); i++) expanded.add(i)
+    if (gap.below) for (let i = Math.max(gap.start, gap.end - 9); i <= gap.end; i++) expanded.add(i)
+    changeExpansion(path, expanded)
+  }
+
+  const resetContext = () => {
+    if (surface.view.pane === "diff" && surface.view.file) changeExpansion(surface.view.file, new Set())
+  }
 
   /** Enter on a folder folds it; on a file it opens it and moves you into the diff. */
   const enter = () => {
@@ -249,6 +324,8 @@ export function createActions(deps: ActionDeps): Actions {
     submit,
     toggleStats,
     pan,
+    expand,
+    resetContext,
     cycle: deps.cycle,
     close,
     reload: deps.refresh,

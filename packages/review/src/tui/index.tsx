@@ -22,7 +22,7 @@ import { paneLayer } from "./panel/keys.ts"
 import { createPainter } from "./panel/paint.ts"
 import { createPointer } from "./panel/pointer.ts"
 import { createQueries } from "./panel/queries.ts"
-import { createSurface } from "./panel/surface.ts"
+import { createSurface, retainExpansion } from "./panel/surface.ts"
 import { createTrouble } from "./panel/trouble.ts"
 import { Overlay } from "./view/overlay.tsx"
 import { createRowPool, type RowPool } from "./view/pool.ts"
@@ -194,7 +194,9 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
         reviewPaths(api.state.path.worktree || api.state.path.directory, api.state.vcs?.branch),
       )
       const directory = api.state.path.worktree || api.state.path.directory
+      const previous = store.current().changes.files
       const [, threads, at] = await Promise.all([store.load(), persistence.load(), headOf(directory)])
+      retainExpansion(surface, previous, store.current().changes.files)
       head = at
       surface.review = { ...surface.review, threads }
       looks.sync(store.current().changes.files)

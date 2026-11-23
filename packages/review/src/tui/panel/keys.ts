@@ -62,6 +62,16 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
       { name: "cockpit.review.pane.panRight", title: "Scroll the code right", run: () => actions.pan(8) },
       { name: "cockpit.review.pane.panLeft", title: "Scroll the code left", run: () => actions.pan(-8) },
       {
+        name: "cockpit.review.pane.expand",
+        title: "Expand nearest context gap",
+        run: () => actions.expand(),
+      },
+      {
+        name: "cockpit.review.pane.resetContext",
+        title: "Reset file context",
+        run: () => actions.resetContext(),
+      },
+      {
         name: "cockpit.review.pane.comment",
         /**
          * One key for saying something.
@@ -139,6 +149,8 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
       { key: "u,pageup", cmd: "cockpit.review.pane.scrollUp", desc: "Scroll up" },
       { key: "shift+right,shift+l", cmd: "cockpit.review.pane.panRight", desc: "Code right" },
       { key: "shift+left,shift+h", cmd: "cockpit.review.pane.panLeft", desc: "Code left" },
+      { key: "+", cmd: "cockpit.review.pane.expand", desc: "Expand context" },
+      { key: "-", cmd: "cockpit.review.pane.resetContext", desc: "Reset context" },
       { key: "c,n", cmd: "cockpit.review.pane.comment", desc: "Note, or reply" },
       { key: "f", cmd: "cockpit.review.pane.commentFile", desc: "Comment on the file" },
       { key: "v", cmd: "cockpit.review.pane.select", desc: "Select lines" },

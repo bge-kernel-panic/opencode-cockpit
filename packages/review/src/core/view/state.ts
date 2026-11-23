@@ -41,6 +41,7 @@ export interface ViewState {
   opened?: ReadonlySet<string>
   /** Unchanged lines kept either side of a change. */
   context?: number
+  expanded?: ReadonlyMap<string, ReadonlySet<number>>
   /**
    * Columns the code is scrolled to the right. A line longer than the pane used to end in "…" with no
    * way to read the rest; the numbers and the +/− stay where they are, only the code moves.

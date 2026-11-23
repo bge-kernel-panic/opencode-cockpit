@@ -7,7 +7,7 @@
  * file, which is what a three-thousand-line diff felt like before anyone measured it.
  */
 
-import { type Hunk, toHunks } from "../diff/hunks.ts"
+import { diffSections, type Hunk } from "../diff/hunks.ts"
 import { type FileChange, type Review, threadAnchor, threadsFor, threadsOnLine } from "../model/review.ts"
 import { metrics } from "../perf.ts"
 import { cardRows } from "./card.ts"
@@ -145,10 +145,11 @@ const signature = (file: FileChange, review: Review, state: ViewState, width: nu
   const threads = threadsFor(review, file.path)
   return [
     file.path,
-    file.before.length,
-    file.after.length,
+    file.before,
+    file.after,
     width,
     state.context ?? 3,
+    [...(state.expanded?.get(file.path) ?? [])].sort((a, b) => a - b).join(","),
     state.shift ?? 0,
     threads.some((thread) => thread.id === state.thread) ? state.thread : "",
     threads.map((thread) => `${thread.id}:${thread.status}:${thread.entries.length}`).join(","),
@@ -257,7 +258,24 @@ function buildDiffRows(
   const language = languageOf(file.path)
   const body = codeWidth(width)
 
-  for (const hunk of toHunks(file.before, file.after, { context: state.context ?? 3 })) {
+  for (const section of diffSections(file.before, file.after, {
+    context: state.context ?? 3,
+    expanded: state.expanded?.get(file.path),
+  })) {
+    if ("start" in section) {
+      rows.push({
+        gap: section,
+        runs: [
+          {
+            text: cell(`  ↕ ${section.end - section.start + 1} hidden lines`, width),
+            tone: "accent",
+            fill: "panel",
+          },
+        ],
+      })
+      continue
+    }
+    const hunk = section
     /**
      * A blank row above every hunk.
      *

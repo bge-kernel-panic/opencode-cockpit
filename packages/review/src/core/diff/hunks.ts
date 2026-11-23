@@ -31,6 +31,7 @@ export interface Hunk {
 export interface DiffOptions {
   /** Unchanged lines kept either side of a change. */
   context?: number
+  expanded?: ReadonlySet<number>
 }
 
 /**
@@ -322,24 +323,44 @@ function uniqueAnchors(old: readonly string[], now: readonly string[]): { a: num
  * The changed parts, with a few unchanged lines either side for orientation, and the long runs of
  * untouched file left out — which is the whole reason a diff is readable at all.
  */
-export function toHunks(before: string, after: string, options: DiffOptions = {}): Hunk[] {
+export interface Gap {
+  start: number
+  end: number
+  above: boolean
+  below: boolean
+}
+
+export function diffSections(before: string, after: string, options: DiffOptions = {}): (Hunk | Gap)[] {
   const context = Math.max(0, options.context ?? 3)
   const lines = diffLines(before, after)
   const changed = lines.map((line) => line.kind !== "context")
   if (!changed.includes(true)) return []
 
   /** Which lines to keep: every change, plus `context` either side of one. */
-  const keep = lines.map((_, index) =>
-    changed.slice(Math.max(0, index - context), index + context + 1).includes(true),
+  const keep = lines.map(
+    (line, index) =>
+      (line.after !== undefined && options.expanded?.has(line.after)) ||
+      changed.slice(Math.max(0, index - context), index + context + 1).includes(true),
   )
 
-  const hunks: Hunk[] = []
+  const sections: (Hunk | Gap)[] = []
   let current: Hunk | undefined
   for (const [index, line] of lines.entries()) {
     if (!keep[index]) {
       current = undefined
+      const last = sections.at(-1)
+      if (last && "start" in last) last.end = line.after as number
+      else
+        sections.push({
+          start: line.after as number,
+          end: line.after as number,
+          above: index > 0,
+          below: true,
+        })
       continue
     }
+    const last = sections.at(-1)
+    if (last && "start" in last) last.below = true
     if (!current) {
       current = {
         // A hunk that opens on an added line has no old line of its own; it starts where the old
@@ -348,11 +369,17 @@ export function toHunks(before: string, after: string, options: DiffOptions = {}
         afterStart: line.after ?? nextNumber(lines, index, "after"),
         lines: [],
       }
-      hunks.push(current)
+      sections.push(current)
     }
     current.lines.push(line)
   }
-  return hunks
+  const last = sections.at(-1)
+  if (last && "start" in last) last.below = false
+  return sections
+}
+
+export function toHunks(before: string, after: string, options: DiffOptions = {}): Hunk[] {
+  return diffSections(before, after, options).filter((section): section is Hunk => "lines" in section)
 }
 
 /** The first line number of the given side at or after `from`, defaulting to 1 for a new file. */
