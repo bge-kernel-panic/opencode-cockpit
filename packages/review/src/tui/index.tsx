@@ -18,7 +18,7 @@ import { createPersistence } from "../io/persist.ts"
 import { createViewer, systemExists, systemSpawn, systemWhich } from "../io/viewer.ts"
 import { createStore } from "./data/changes.ts"
 import { createActions } from "./panel/actions.ts"
-import { paneLayer } from "./panel/keys.ts"
+import { paneLayer, printable } from "./panel/keys.ts"
 import { createPainter } from "./panel/paint.ts"
 import { createPointer } from "./panel/pointer.ts"
 import { createQueries } from "./panel/queries.ts"
@@ -98,6 +98,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
     let pool: RowPool | undefined
     let disposeKeys: (() => void) | undefined
     let watching: ReturnType<typeof setInterval> | undefined
+    let disposed = false
     /** The commit the working tree is on, re-read when the diff is, and only used as provenance. */
     let head: string | undefined
 
@@ -152,7 +153,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
       () => draw(),
     )
 
-    const { draw } = createPainter({
+    const painter = createPainter({
       api,
       surface,
       store,
@@ -163,6 +164,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
       looks: () => looks.current(),
       settings: notices.map(noticeText),
     })
+    const { draw } = painter
 
     /** `o`: the old side out of git, uncapped — a viewer needs the whole file, not its header. */
     const viewer = createViewer({
@@ -196,6 +198,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
       const directory = api.state.path.worktree || api.state.path.directory
       const previous = store.current().changes.files
       const [, threads, at] = await Promise.all([store.load(), persistence.load(), headOf(directory)])
+      if (disposed) return
       retainExpansion(surface, previous, store.current().changes.files)
       head = at
       surface.review = { ...surface.review, threads }
@@ -217,7 +220,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
      */
     const reconcile = async () => {
       const threads = await persistence.load().catch(() => undefined)
-      if (!threads) return
+      if (disposed || !threads) return
       if (JSON.stringify(threads) === JSON.stringify(surface.review.threads)) return
       surface.review = { ...surface.review, threads }
       draw()
@@ -251,6 +254,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
     }
 
     const show = () => {
+      if (disposed) return
       surface.open = true
       surface.yielded = false
       panel?.focus()
@@ -307,6 +311,18 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
         { priority: 10_000 },
       ),
     )
+    api.lifecycle.onDispose(
+      api.keymap.interceptAfter((context) => {
+        if (
+          surface.open &&
+          !surface.yielded &&
+          disposeKeys &&
+          !context.event.defaultPrevented &&
+          printable(context.event)
+        )
+          context.consume({ preventDefault: true, stopPropagation: true })
+      }),
+    )
 
     const cycle = () => {
       surface.variant = VARIANTS[(VARIANTS.indexOf(surface.variant) + 1) % VARIANTS.length] ?? "right"
@@ -344,6 +360,28 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
       listHeight,
       viewport,
       actions,
+    })
+
+    api.lifecycle.onDispose(() => {
+      disposed = true
+      const wasOpen = surface.open
+      surface.open = false
+      surface.yielded = false
+      clearInterval(watching)
+      clearInterval(waiting)
+      watching = undefined
+      waiting = undefined
+      painter.dispose()
+      dropKeys()
+      backdrop = undefined
+      panel = undefined
+      pool = undefined
+      void viewer.clean()
+      if (wasOpen) {
+        const at = api.renderer.getCursorState?.()
+        if (at) api.renderer.setCursorPosition(at.x, at.y, true)
+        else api.renderer.setCursorPosition(0, 0, true)
+      }
     })
 
     api.keymap.registerLayer({
@@ -414,6 +452,7 @@ export function createReviewTui({ source = REVIEW_PACKAGE }: { source?: string }
                 guard.run("pan", () => pointer.panAt(x, delta))
               }}
               onReady={({ backdrop: back, panel: front, lines }) => {
+                if (disposed) return
                 backdrop = back
                 panel = front
                 pool = createRowPool(lines)

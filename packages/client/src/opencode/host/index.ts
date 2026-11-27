@@ -100,6 +100,8 @@ export interface Host {
     useLayer(layer: () => Layer): void
     /** Every key before the keymap sees it; `consume` keeps it from everyone else. */
     intercept(handler: (context: InterceptContext) => void, options?: { priority?: number }): () => void
+    /** Keys left over after the host keymap has dispatched them, before focused input. */
+    interceptAfter(handler: (context: InterceptContext) => void): () => void
     /** The key a command is bound to, formatted for a hint. */
     shortcut(command: string): string
   }
@@ -167,8 +169,7 @@ export function dualTui(id: string, start: Start) {
     setup: async (ctx: V2Context) => {
       const cleanups: (() => void)[] = []
       const host = fromV2(ctx, (fn) => cleanups.push(fn), createLog("tui"))
-      await run(host, ctx.options as Record<string, unknown>, undefined)
-      return () => {
+      const cleanup = () => {
         for (const fn of cleanups.reverse()) {
           try {
             fn()
@@ -177,7 +178,15 @@ export function dualTui(id: string, start: Start) {
             host.log.warn("cleanup failed", { entry: id, error })
           }
         }
+        cleanups.length = 0
       }
+      try {
+        await run(host, ctx.options as Record<string, unknown>, undefined)
+      } catch (error) {
+        cleanup()
+        throw error
+      }
+      return cleanup
     },
   }
 }

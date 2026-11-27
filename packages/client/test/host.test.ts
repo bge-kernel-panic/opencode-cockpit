@@ -229,6 +229,17 @@ describe("the v2 host", () => {
 })
 
 describe("one entry for both", () => {
+  test("given failed setup, when starting again, then all acquired resources were released", async () => {
+    const disposed: string[] = []
+    const entry = dualTui("cockpit.test.failure", (host) => {
+      host.lifecycle.onDispose(() => disposed.push("a"))
+      host.lifecycle.onDispose(() => disposed.push("b"))
+      throw new Error("startup failed")
+    })
+    await expect(entry.setup(fakeContext().ctx)).rejects.toThrow("startup failed")
+    expect(disposed).toEqual(["b", "a"])
+  })
+
   test("carries v1's tui and v2's setup, and setup hands back a cleanup that runs every dispose", async () => {
     let started: number | undefined
     const disposed: string[] = []

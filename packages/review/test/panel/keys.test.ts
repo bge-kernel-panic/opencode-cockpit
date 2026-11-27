@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test"
+import { EventEmitter } from "node:events"
+import { registerCommaBindings, registerEmacsBindings } from "@opentui/keymap/addons"
+import { createTestKeymap } from "@opentui/keymap/testing"
+import { fromV1, fromV2 } from "../../../client/src/opencode/host/index.ts"
 import type { Guard } from "../../src/core/guard.ts"
 import { REVIEW_KEYS } from "../../src/core/view/keys.ts"
 import type { Actions } from "../../src/tui/panel/actions.ts"
-import { paneLayer } from "../../src/tui/panel/keys.ts"
+import { paneLayer, printable } from "../../src/tui/panel/keys.ts"
 
 /** Actions that only record what was asked of them. */
 function recorder() {
@@ -33,6 +37,120 @@ const bindings = () => layer().bindings ?? []
 const commands = () => layer().commands ?? []
 /** Every key a binding takes, as OpenTUI names it: `return`, `shift+l`, `escape`. */
 const boundKeys = () => bindings().flatMap((binding) => binding.key.split(","))
+
+test("given key events when checking printable input then text is distinguished from shortcuts", () => {
+  expect(printable({ name: "a", sequence: "a" })).toBe(true)
+  expect(printable({ name: "é", sequence: "é" })).toBe(true)
+  expect(printable({ name: "p", sequence: "\x10", ctrl: true })).toBe(false)
+  expect(printable({ name: "escape", sequence: "\x1b" })).toBe(false)
+})
+
+test("given a host chord when review filters keys then its continuation reaches the real keymap", () => {
+  const harness = createTestKeymap({ defaultKeys: true })
+  registerEmacsBindings(harness.keymap)
+  registerCommaBindings(harness.keymap)
+  const review = recorder()
+  harness.keymap.registerLayer(paneLayer(review.actions, passThrough().guard) as never)
+  let ran = false
+  harness.keymap.registerLayer({
+    commands: [
+      {
+        name: "host.action",
+        run: () => {
+          ran = true
+        },
+      },
+    ],
+    bindings: [{ key: "ctrl+x a", cmd: "host.action" }],
+  })
+  const host = fromV1({ keymap: harness.keymap, ui: { dialog: {} } } as never)
+  host.keymap.interceptAfter((context) => {
+    const event = context.event
+    const sequence = event.name.length === 1 ? event.name : ""
+    if (!event.defaultPrevented && printable({ ...event, sequence })) context.consume()
+  })
+  expect(harness.host.press("x", { ctrl: true }).defaultPrevented).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(true)
+  expect(harness.host.press("a").defaultPrevented).toBe(true)
+  expect(harness.host.press("j").defaultPrevented).toBe(true)
+  expect(review.called).toEqual(["leaveKeys", "move(1)"])
+  expect(ran).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(false)
+  harness.host.press("x", { ctrl: true })
+  expect(harness.host.press("y").defaultPrevented).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(false)
+  expect(harness.host.press("a").defaultPrevented).toBe(true)
+  harness.cleanup()
+})
+
+test("given a v2 host chord when review filters keys then its continuation reaches the keymap", () => {
+  const harness = createTestKeymap({ defaultKeys: true })
+  registerEmacsBindings(harness.keymap)
+  registerCommaBindings(harness.keymap)
+  const review = recorder()
+  harness.keymap.registerLayer(paneLayer(review.actions, passThrough().guard) as never)
+  let ran = false
+  harness.keymap.registerLayer({
+    commands: [
+      {
+        name: "host.action",
+        run: () => {
+          ran = true
+        },
+      },
+    ],
+    bindings: [{ key: "ctrl+x a", cmd: "host.action" }],
+  })
+  const input = new EventEmitter()
+  input.on("keypress", (event) => {
+    if (!event.propagationStopped) {
+      const result = harness.host.press(event.name, { ctrl: event.ctrl })
+      if (result.defaultPrevented) event.preventDefault()
+    }
+  })
+  const host = fromV2(
+    {
+      renderer: { keyInput: input },
+      location: { directory: "/work" },
+      data: { location: { vcs: { sync: async () => {} } } },
+      storage: { store: () => [{ values: {} }, async () => {}] },
+      ui: { slot: () => () => {} },
+    } as never,
+    () => {},
+  )
+  host.keymap.interceptAfter((context) => {
+    if (!context.event.defaultPrevented && printable(context.event)) context.consume()
+  })
+  const press = (name: string, ctrl = false) => {
+    const event = {
+      name,
+      ctrl,
+      sequence: ctrl ? "\x18" : name,
+      defaultPrevented: false,
+      propagationStopped: false,
+      preventDefault() {
+        this.defaultPrevented = true
+      },
+      stopPropagation() {
+        this.propagationStopped = true
+      },
+    }
+    input.emit("keypress", event)
+    return event
+  }
+  expect(press("x", true).defaultPrevented).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(true)
+  expect(press("a").defaultPrevented).toBe(true)
+  expect(press("j").defaultPrevented).toBe(true)
+  expect(review.called).toEqual(["leaveKeys", "move(1)"])
+  expect(ran).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(false)
+  press("x", true)
+  expect(press("y").defaultPrevented).toBe(true)
+  expect(harness.keymap.hasPendingSequence()).toBe(false)
+  expect(press("a").defaultPrevented).toBe(true)
+  harness.cleanup()
+})
 
 describe("the table", () => {
   test("every binding runs a command the layer has, and every command has a key", () => {

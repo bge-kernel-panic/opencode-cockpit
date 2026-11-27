@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { emptyReview, open } from "../../src/core/model/review.ts"
 import { metrics } from "../../src/core/perf.ts"
+import { layout } from "../../src/core/view/layout.ts"
 import { cursorRow } from "../../src/core/view/stream.ts"
 import { type ActionDeps, createActions } from "../../src/tui/panel/actions.ts"
 import { createNavigation } from "../../src/tui/panel/navigation.ts"
@@ -180,4 +181,38 @@ test("given a selected line note, when folding and removing at the heading, then
   actions.toggleViewed()
   expect(surface.view.thread).toBeUndefined()
   expect(surface.view.line).toBeUndefined()
+})
+
+test("given a note selected by jumping, when removing it, then the remaining review can be drawn", () => {
+  for (const direction of [1, -1]) {
+    const file = { path: "test.ts", before: "old\n", after: "new\n", additions: 1, deletions: 1 }
+    const changes = { source: "branch" as const, files: [file] }
+    const surface = createSurface("pane")
+    surface.review = open(emptyReview(), { file: file.path, line: 1 }, "note", "you", 1)
+    surface.view = { pane: "diff", file: file.path }
+    const store = { current: () => ({ changes }) } as ActionDeps["store"]
+    const api = {} as ActionDeps["api"]
+    const removed: string[] = []
+    const actions = createActions({
+      api,
+      surface,
+      store,
+      queries: createQueries(api, surface, store),
+      viewport: () => ({ width: 100, height: 30 }),
+      listHeight: () => 20,
+      draw: () => {},
+      persistence: () => ({
+        remove: async (id: string) => {
+          removed.push(id)
+        },
+      }),
+    } as unknown as ActionDeps)
+    const id = surface.review.threads[0]?.id
+    actions.jumpNote(direction)
+    expect(surface.view.thread).toBe(id)
+    actions.uncomment()
+    expect(surface.review.threads).toHaveLength(0)
+    expect(removed).toEqual([id])
+    expect(() => layout(changes, surface.review, surface.view, { width: 100, height: 28 })).not.toThrow()
+  }
 })

@@ -13,11 +13,21 @@
 
 import type { Host } from "@opencode-cockpit/client/host"
 import type { Guard } from "../../core/guard.ts"
+import type { KeyLike } from "../../core/palette.ts"
 import { metrics } from "../../core/perf.ts"
 import type { Actions } from "./actions.ts"
 
 type Layer = Parameters<Host["keymap"]["registerLayer"]>[0]
 type Command = NonNullable<Layer["commands"]>[number]
+
+export function printable(event: KeyLike & { sequence?: string }): boolean {
+  return !(
+    event.ctrl ||
+    event.meta ||
+    !event.sequence ||
+    Array.from(event.sequence).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+  )
+}
 
 /**
  * Every key through the guard, and counted.

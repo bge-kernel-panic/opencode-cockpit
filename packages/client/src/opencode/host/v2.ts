@@ -423,6 +423,19 @@ export function fromV2(ctx: V2Context, onCleanup: (fn: () => void) => void, log:
         input.prependListener("keypress", listener)
         return () => input.off("keypress", listener)
       },
+      interceptAfter: (handler) => {
+        const input = ctx.renderer.keyInput
+        const listener = (event: KeyEvent) =>
+          handler({
+            event,
+            consume: () => {
+              event.preventDefault()
+              event.stopPropagation()
+            },
+          })
+        input.on("keypress", listener)
+        return () => input.off("keypress", listener)
+      },
       shortcut: (command) => ctx.keymap.shortcuts(command)[0] ?? "",
     },
     slots: {

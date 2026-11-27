@@ -113,6 +113,7 @@ export function fromV1(api: TuiPluginApi, log: Log = silentLog): Host {
       registerLayer: (layer) => api.keymap.registerLayer(layer),
       useLayer: (layer) => useApiLayer(api, layer),
       intercept: (handler, options) => api.keymap.intercept("key", handler as never, options),
+      interceptAfter: (handler) => api.keymap.intercept("key:after", handler as never),
       shortcut: (command) => {
         const bindings = api.keymap.getCommandBindings({ visibility: "registered", commands: [command] })
         return api.keys.formatBindings(bindings.get(command)) ?? ""

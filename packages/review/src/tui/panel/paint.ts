@@ -50,10 +50,14 @@ const SAID_MS = 8_000
 export interface Painter {
   /** Asks for a paint. Several asks in one turn are one paint, of the state the turn ended on. */
   draw: () => void
+  dispose: () => void
 }
 
 export function createPainter(deps: PaintDeps): Painter {
   const { api, surface, store, guard, queries } = deps
+  let disposed = false
+  let scheduled: ReturnType<typeof setTimeout> | undefined
+  let cursor: ReturnType<typeof setTimeout> | undefined
 
   /** Everything on screen, recomputed and pushed onto the boxes. Called through `draw`, never directly. */
   const paint = () => {
@@ -96,7 +100,9 @@ export function createPainter(deps: PaintDeps): Painter {
      * during our draw is not enough either: the host paints its prompt afterwards and puts the cursor
      * back, so the last word has to be ours.
      */
-    setTimeout(() => {
+    clearTimeout(cursor)
+    cursor = setTimeout(() => {
+      cursor = undefined
       if (surface.open && !surface.yielded) api.renderer.setCursorPosition(0, 0, false)
     }, 0)
 
@@ -137,26 +143,32 @@ export function createPainter(deps: PaintDeps): Painter {
     api.renderer.requestRender()
   }
 
-  let scheduled = false
   return {
     draw() {
-      if (scheduled) {
+      if (disposed) return
+      if (scheduled !== undefined) {
         metrics.count("coalesced")
         return
       }
-      scheduled = true
       /**
        * A macrotask, not a microtask: a paint that asked for another paint would re-queue inside the
        * same drain and starve the event loop — a freeze that reads exactly like a crash. A timeout
        * collapses a burst just as well and always gives the loop its turn back.
        */
-      setTimeout(() => {
-        scheduled = false
+      scheduled = setTimeout(() => {
+        scheduled = undefined
         metrics.count("paints")
         metrics.time("paint", () => {
           guard.run("paint", paint)
         })
       }, 0)
+    },
+    dispose() {
+      disposed = true
+      clearTimeout(scheduled)
+      clearTimeout(cursor)
+      scheduled = undefined
+      cursor = undefined
     },
   }
 }
