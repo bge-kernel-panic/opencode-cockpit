@@ -391,6 +391,15 @@ export function cursorRow(
 ): number | undefined {
   const segment = stream.segments.find((each) => each.path === state.file)
   if (!segment) return undefined
+  if (state.thread && segment.open) {
+    const rows = segment.file
+      ? diffRows(segment.file, review, state, innerWidth(width))
+      : awayRows(segment.path, review, state, innerWidth(width))
+    const at = rows.findIndex(
+      (row, index) => index > 0 && row.target === state.thread && row.line === undefined,
+    )
+    if (at >= 1) return segment.start + HEAD + at - 1
+  }
   if (state.line === undefined || !segment.open || !segment.file) return segment.start + TITLE
   const at = diffRows(segment.file, review, state, innerWidth(width)).findIndex(
     (row) => row.line === state.line,

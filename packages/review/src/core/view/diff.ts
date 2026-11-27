@@ -249,9 +249,26 @@ function buildDiffRows(
     )
   }
 
+  const appendMissing = () => {
+    const shown = new Set(rows.map((row) => row.target))
+    for (const thread of threadsFor(review, file.path)) {
+      if (shown.has(thread.id)) continue
+      rows.push(
+        ...indent(
+          cardRows(thread, { width: width - INDENT, height: 40 }, threadAnchor(thread, file).state, {
+            inline: true,
+            focused: thread.id === state.thread,
+          }),
+          thread.id,
+        ),
+      )
+    }
+  }
+
   /** A binary has no lines: its card says what it is, how it changed, and shows it. */
   if (file.binary) {
     rows.push(...binaryRows(file, state.looks?.get(file.path), width, state.canvas, paint))
+    appendMissing()
     return rows
   }
 
@@ -386,6 +403,7 @@ function buildDiffRows(
       }
     }
   }
+  appendMissing()
   return rows
 }
 

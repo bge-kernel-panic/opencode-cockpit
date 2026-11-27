@@ -55,7 +55,12 @@ export function createQueries(api: Host, surface: Surface, store: Store): Querie
   const hereThreadId = (): string | undefined => {
     const { view, review } = surface
     if (!view.file) return undefined
-    if (view.thread && review.threads.some((each) => each.id === view.thread)) return view.thread
+    if (
+      view.thread &&
+      view.pane === "diff" &&
+      review.threads.some((each) => each.id === view.thread && each.file === view.file)
+    )
+      return view.thread
     if (view.pane !== "diff") return undefined
     /** On the file's heading, the file's own thread is the one you are standing on. */
     if (view.line === undefined)

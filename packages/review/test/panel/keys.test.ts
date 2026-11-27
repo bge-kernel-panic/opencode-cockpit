@@ -67,6 +67,11 @@ describe("running a key", () => {
     expect(run("cockpit.review.pane.submit").called).toEqual(["leaveKeys", "submit"])
   })
 
+  test("given note navigation commands when run then jump in the requested direction", () => {
+    expect(run("cockpit.review.pane.nextNote").called).toEqual(["leaveKeys", "jumpNote(1)"])
+    expect(run("cockpit.review.pane.previousNote").called).toEqual(["leaveKeys", "jumpNote(-1)"])
+  })
+
   test("the keys that mean something on the keys screen keep it: ?, close and the numbers", () => {
     expect(run("cockpit.review.pane.keys").called).toEqual(["toggleKeys"])
     expect(run("cockpit.review.pane.quit").called).toEqual(["quit"])
@@ -97,6 +102,7 @@ describe("the keys screen says what is bound", () => {
     "shift+right": "in L's line: (also shift+→, shift+←)",
     "shift+left": "in L's line: (also shift+→, shift+←)",
     "shift+/": "the same key as ?",
+    "shift+;": "the same key as :",
     q: "closes, kept for hands that learned it; the screen teaches esc (design-system.md)",
   }
   const shown = () => new Set(REVIEW_KEYS.flatMap((line) => line.keys.flatMap((key) => SCREEN[key] ?? [key])))

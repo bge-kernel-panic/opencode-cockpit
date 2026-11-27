@@ -25,6 +25,10 @@ are on — resolving is what the agent does, removing is what you do to a mistak
 Nothing is sent when you write it. The note is saved to disk as you submit the dialog, and reaches the
 agent when you submit the review.
 
+Use <kbd>n</kbd> and <kbd>p</kbd> to jump to the next or previous thread, wrapping across files.
+Every status is included, as are file-wide threads and threads on files outside the current diff.
+The destination file unfolds if necessary; <kbd>c</kbd> replies to the selected thread.
+
 ## What a thread remembers
 
 The lines it was written against, as they read at the time. That is what lets the panel show the code

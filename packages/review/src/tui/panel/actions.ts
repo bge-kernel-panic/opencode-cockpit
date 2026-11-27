@@ -66,6 +66,7 @@ export interface ActionDeps {
 
 export interface Actions {
   move: (delta: number) => void
+  jumpNote: (delta: number) => void
   scroll: (delta: number) => void
   /** The code sideways, by columns: negative is back towards the start of the lines. */
   pan: (delta: number) => void
@@ -110,7 +111,7 @@ export function createActions(deps: ActionDeps): Actions {
   const close = deps.close
   const SOURCES = deps.sources
   const navigation = createNavigation(deps)
-  const { listState, move, scroll, pan, toFiles, swap } = navigation
+  const { listState, move, jumpNote, scroll, pan, toFiles, swap } = navigation
   const threads = createThreads(deps, navigation)
   const {
     comment,
@@ -154,7 +155,7 @@ export function createActions(deps: ActionDeps): Actions {
               : best,
           undefined,
         )
-        surface.view = { ...surface.view, line: nearest, anchor: undefined }
+        surface.view = { ...surface.view, line: nearest, anchor: undefined, thread: undefined }
         moved = true
       } else if (anchor !== undefined && !lines.includes(anchor)) {
         surface.view = { ...surface.view, anchor: undefined }
@@ -202,7 +203,14 @@ export function createActions(deps: ActionDeps): Actions {
     const row = rows.find((candidate) => candidate.path === surface.view.cursor)
     if (!row) return
     if (row.kind === "file") {
-      surface.view = { ...surface.view, file: row.path, scroll: undefined, pane: "diff", line: undefined }
+      surface.view = {
+        ...surface.view,
+        file: row.path,
+        scroll: undefined,
+        pane: "diff",
+        line: undefined,
+        thread: undefined,
+      }
     } else {
       const collapsed = new Set(surface.view.collapsed ?? [])
       if (collapsed.has(row.path)) collapsed.delete(row.path)
@@ -305,6 +313,7 @@ export function createActions(deps: ActionDeps): Actions {
 
   return {
     move,
+    jumpNote,
     scroll,
     swap,
     enter,

@@ -17,6 +17,7 @@ export interface KeyLine {
 /** In the order a review is done: move, read, say something, finish — then the pane itself. */
 export const REVIEW_KEYS: readonly KeyLine[] = [
   { keys: ["j/k", "↑/↓"], does: "Move: files in the list, lines in the diff" },
+  { keys: ["n", "p"], does: "Next or previous note, wrapping across files" },
   { keys: ["tab"], does: "Switch between the file list and the diff" },
   {
     keys: ["enter", "l"],
@@ -29,7 +30,7 @@ export const REVIEW_KEYS: readonly KeyLine[] = [
     does: "Scroll the code sideways, for lines longer than the pane (also shift+→, shift+←)",
   },
   { keys: ["v"], does: "Select lines; the cursor is the moving end" },
-  { keys: ["c", "n"], does: "Comment on the line or the selection — or reply, on a thread" },
+  { keys: ["c"], does: "Comment on the line or the selection — or reply, on a thread" },
   { keys: ["f"], does: "Comment on the whole file" },
   { keys: ["x"], does: "Remove the thread here" },
   { keys: ["space", "m"], does: "Mark the file viewed and go to the next one that is not" },
@@ -41,7 +42,7 @@ export const REVIEW_KEYS: readonly KeyLine[] = [
   { keys: ["B"], does: "Choose the branch to compare against" },
   { keys: ["g"], does: "Read the changes again" },
   { keys: ["w"], does: "Right pane or full screen" },
-  { keys: ["p"], does: "Show what the review costs to draw" },
+  { keys: [":"], does: "Show what the review costs to draw" },
   { keys: ["?", "esc"], does: "Hide these keys; esc again closes the review" },
 ]
 

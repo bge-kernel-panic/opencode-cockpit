@@ -129,6 +129,8 @@ export function createThreads(deps: ActionDeps, navigation: Navigation): Threads
    * on the thread. A second cursor for threads would be a second thing to move and to explain.
    */
   const hereThread = () => {
+    const selected = queries.hereThreadId()
+    if (selected) return surface.review.threads.find((thread) => thread.id === selected)
     if (!surface.view.file) return undefined
     if (surface.view.pane === "files")
       return threadsFor(surface.review, surface.view.file).find((each) => each.line === undefined)
@@ -306,7 +308,15 @@ export function createThreads(deps: ActionDeps, navigation: Navigation): Threads
       const next =
         order.slice(from + 1).find(unread) ?? order.slice(0, Math.max(0, from)).reverse().find(unread)
       if (next) {
-        surface.view = { ...surface.view, file: next, cursor: next, scroll: undefined, line: undefined }
+        surface.view = {
+          ...surface.view,
+          file: next,
+          cursor: next,
+          scroll: undefined,
+          line: undefined,
+          anchor: undefined,
+          thread: undefined,
+        }
         surface.view = { ...surface.view, scroll: streamScroll(streamNow(), surface.view, listHeight()) }
       } else follow()
     }
@@ -326,7 +336,7 @@ export function createThreads(deps: ActionDeps, navigation: Navigation): Threads
     surface.view = { ...surface.view, folded, opened }
     /** On a line of a file that just folded, the cursor goes up to its heading. */
     if (surface.view.file === path && isRead(surface.review, path))
-      surface.view = { ...surface.view, line: undefined }
+      surface.view = { ...surface.view, line: undefined, anchor: undefined, thread: undefined }
   }
 
   const toggleViewed = (path = surface.view.file) => {
@@ -349,13 +359,21 @@ export function createThreads(deps: ActionDeps, navigation: Navigation): Threads
       opened.add(path)
       folded.delete(path)
     }
-    surface.view = { ...surface.view, folded, opened, file: path, line: undefined, anchor: undefined }
+    surface.view = {
+      ...surface.view,
+      folded,
+      opened,
+      file: path,
+      line: undefined,
+      anchor: undefined,
+      thread: undefined,
+    }
     follow()
     draw()
   }
 
   const commentFile = (path: string) => {
-    surface.view = { ...surface.view, file: path, line: undefined, anchor: undefined }
+    surface.view = { ...surface.view, file: path, line: undefined, anchor: undefined, thread: undefined }
     comment(true)
   }
 

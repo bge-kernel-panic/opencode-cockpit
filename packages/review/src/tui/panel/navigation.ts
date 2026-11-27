@@ -4,15 +4,17 @@
  * (`streamNow`, `listState`) and on `follow`, so they come from here too.
  */
 
-import { filesElsewhere } from "../../core/model/review.ts"
-import { mostShift } from "../../core/view/diff.ts"
+import { filesElsewhere, threadsFor } from "../../core/model/review.ts"
+import { awayRows, diffRows, mostShift } from "../../core/view/diff.ts"
 import { streamWidth } from "../../core/view/layout.ts"
 import { keepCursorVisible, navigableRows } from "../../core/view/list.ts"
 import {
   cursorRow,
+  type Segment,
   segmentAt,
   stopsOf,
   streamOf,
+  streamOrder,
   streamScroll,
   streamWindow,
 } from "../../core/view/stream.ts"
@@ -25,6 +27,7 @@ export interface Navigation {
   streamNow: () => ReturnType<typeof streamOf>
   follow: () => void
   move: (delta: number) => void
+  jumpNote: (delta: number) => void
   scroll: (delta: number) => void
   pan: (delta: number) => void
   toFiles: () => void
@@ -61,6 +64,7 @@ export function createNavigation(deps: ActionDeps): Navigation {
         scroll: undefined,
         line: undefined,
         anchor: undefined,
+        thread: undefined,
       }
     surface.view = {
       ...surface.view,
@@ -110,8 +114,26 @@ export function createNavigation(deps: ActionDeps): Navigation {
     )
     let segment = segments[index]
     if (!segment) return
-    let stops = stopsOf(segment, surface.review, surface.view, width())
-    let at = Math.max(0, stops.indexOf(surface.view.line))
+    const stopsFor = (item: Segment) => [
+      { line: undefined as number | undefined, thread: undefined as string | undefined },
+      ...(item.open
+        ? threadsFor(surface.review, item.path)
+            .filter((thread) => thread.line === undefined)
+            .map((thread) => ({ line: undefined, thread: thread.id }))
+        : []),
+      ...stopsOf(item, surface.review, surface.view, width())
+        .filter((line): line is number => line !== undefined)
+        .map((line) => ({ line, thread: undefined })),
+    ]
+    let stops = stopsFor(segment)
+    let at = Math.max(
+      0,
+      stops.findIndex((stop) =>
+        surface.view.thread && surface.view.line === undefined
+          ? stop.thread === surface.view.thread
+          : stop.line === surface.view.line && !stop.thread,
+      ),
+    )
     const step = Math.sign(delta)
     for (let left = Math.abs(delta); left > 0; left--) {
       if (at + step >= 0 && at + step < stops.length) {
@@ -122,15 +144,15 @@ export function createNavigation(deps: ActionDeps): Navigation {
       if (!neighbour) break
       index += step
       segment = neighbour
-      stops = stopsOf(segment, surface.review, surface.view, width())
+      stops = stopsFor(segment)
       at = step > 0 ? 0 : stops.length - 1
     }
     const moved = segment.path !== surface.view.file
     surface.view = {
       ...surface.view,
       file: segment.path,
-      line: stops[at],
-      thread: undefined,
+      line: stops[at]?.line,
+      thread: stops[at]?.thread,
       /** A selection is inside one file: leaving the file lets go of it. */
       ...(moved ? { anchor: undefined } : {}),
     }
@@ -139,6 +161,76 @@ export function createNavigation(deps: ActionDeps): Navigation {
   }
 
   const move = (delta: number) => (surface.view.pane === "diff" ? moveLines(delta) : moveFiles(delta))
+
+  const jumpNote = (delta: number) => {
+    if (!delta) return
+    const changes = store.current().changes
+    const paths = streamOrder(changes, listState())
+    const files = new Map(changes.files.map((file) => [file.path, file]))
+    const noted = new Set(surface.review.threads.map((thread) => thread.file))
+    if (!paths.some((path) => noted.has(path))) return
+    const step = Math.sign(delta)
+    const selected =
+      surface.view.pane === "diff"
+        ? surface.review.threads.find((thread) => thread.id === surface.view.thread)
+        : undefined
+    const from = paths.indexOf(selected?.file ?? surface.view.file ?? "")
+    const start = from < 0 ? (step > 0 ? 0 : paths.length - 1) : from
+    const notesFor = (path: string) => {
+      const file = files.get(path)
+      const rows = file
+        ? diffRows(file, surface.review, surface.view, Math.max(1, width() - 2))
+        : awayRows(path, surface.review, surface.view, Math.max(1, width() - 2))
+      const seen = new Set<string>()
+      let line: number | undefined
+      return rows.slice(1).flatMap((row) => {
+        if (row.line !== undefined) line = row.line
+        if (!row.target || seen.has(row.target)) return []
+        seen.add(row.target)
+        return [{ file: path, line, thread: row.target }]
+      })
+    }
+    let note: ReturnType<typeof notesFor>[number] | undefined
+    let firstNotes: ReturnType<typeof notesFor> | undefined
+    for (let offset = 0; offset <= paths.length; offset++) {
+      const path = paths[(start + step * offset + paths.length) % paths.length]
+      if (!path || !noted.has(path)) continue
+      const notes = offset === paths.length && firstNotes ? firstNotes : notesFor(path)
+      if (offset === 0) firstNotes = notes
+      if (offset === 0 && from >= 0) {
+        const at = selected ? notes.findIndex((item) => item.thread === selected.id) : -1
+        if (at >= 0) note = notes[at + step]
+        else {
+          const line = surface.view.pane === "diff" ? surface.view.line : undefined
+          note =
+            step > 0
+              ? notes.find((item) => line === undefined || (item.line ?? 0) > line)
+              : notes.findLast((item) => line !== undefined && (item.line ?? 0) < line)
+        }
+      } else note = step > 0 ? notes[0] : notes.at(-1)
+      if (note) break
+    }
+    if (!note) return
+    const folded = new Set(surface.view.folded ?? [])
+    const opened = new Set(surface.view.opened ?? [])
+    folded.delete(note.file)
+    opened.add(note.file)
+    surface.view = { ...surface.view, ...note, pane: "diff", anchor: undefined, folded, opened }
+    follow()
+    const stream = streamNow()
+    const row = cursorRow(stream, surface.review, surface.view, width())
+    if (row !== undefined) {
+      const file = files.get(note.file)
+      const rows = file
+        ? diffRows(file, surface.review, surface.view, Math.max(1, width() - 2))
+        : awayRows(note.file, surface.review, surface.view, Math.max(1, width() - 2))
+      const noteHeight = rows.filter((each) => each.target === note.thread).length
+      const height = listHeight()
+      const margin = Math.max(1, Math.floor((height - noteHeight) / 2))
+      surface.view = { ...surface.view, scroll: Math.max(0, row - margin) }
+    }
+    draw()
+  }
 
   /**
    * Scrolling moves the view, and the cursor only if the view leaves it behind — then it lands on the
@@ -180,6 +272,7 @@ export function createNavigation(deps: ActionDeps): Navigation {
           cursor: file,
           line: landing?.header ? undefined : landing?.line,
           anchor: undefined,
+          thread: undefined,
         }
       }
     }
@@ -203,17 +296,21 @@ export function createNavigation(deps: ActionDeps): Navigation {
    * have to be told. `h` and `left` are where a hand already is after `j`/`k`.
    */
   const toFiles = () => {
-    surface.view = { ...surface.view, pane: "files", anchor: undefined }
+    surface.view = { ...surface.view, pane: "files", anchor: undefined, thread: undefined }
     draw()
   }
 
   /** Two panes, one keyboard: `tab` says which one `j` is talking to. */
   const swap = () => {
-    surface.view = { ...surface.view, pane: surface.view.pane === "diff" ? "files" : "diff" }
+    surface.view = {
+      ...surface.view,
+      pane: surface.view.pane === "diff" ? "files" : "diff",
+      thread: undefined,
+    }
     if (surface.view.pane === "diff" && surface.view.file === undefined)
       surface.view = { ...surface.view, file: streamNow().segments[0]?.path, scroll: undefined }
     draw()
   }
 
-  return { listState, width, streamNow, follow, move, scroll, pan, toFiles, swap }
+  return { listState, width, streamNow, follow, move, jumpNote, scroll, pan, toFiles, swap }
 }

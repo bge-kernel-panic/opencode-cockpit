@@ -59,7 +59,7 @@ export function createPointer(deps: PointerDeps): Pointer {
         if (rows.length === 0) return
         const entry = rows[row + listScroll(store.current().changes, state, deps.listHeight())]
         if (!entry) return
-        surface.view = { ...surface.view, cursor: entry.path, pane: "files" }
+        surface.view = { ...surface.view, cursor: entry.path, pane: "files", thread: undefined }
         if (entry.kind === "file") {
           /** Into the stream at that file's heading, the way GitHub's file tree jumps. */
           surface.view = {
@@ -68,6 +68,7 @@ export function createPointer(deps: PointerDeps): Pointer {
             scroll: undefined,
             line: undefined,
             anchor: undefined,
+            thread: undefined,
           }
         } else {
           const collapsed = new Set(surface.view.collapsed ?? [])
@@ -101,7 +102,14 @@ export function createPointer(deps: PointerDeps): Pointer {
         const columns = columnsFor(deps.viewport(), store.current().changes)
         const left = panel.x + 1 + GUTTER + (columns.list > 0 ? columns.list + DIVIDER : 0)
         const zone = headerZone(streamWidth(deps.viewport(), store.current().changes), x - left)
-        surface.view = { ...surface.view, pane: "diff", file: at.file, line: undefined, anchor: undefined }
+        surface.view = {
+          ...surface.view,
+          pane: "diff",
+          file: at.file,
+          line: undefined,
+          anchor: undefined,
+          thread: undefined,
+        }
         if (zone === "viewed") deps.actions.toggleViewed(at.file)
         else if (zone === "note") deps.actions.commentFile(at.file)
         else deps.actions.toggleFold(at.file)
@@ -146,6 +154,7 @@ export function createPointer(deps: PointerDeps): Pointer {
         surface.view = {
           ...surface.view,
           pane: "files",
+          thread: undefined,
           listOffset: Math.max(0, (surface.view.listOffset ?? 0) + delta),
         }
       } else {

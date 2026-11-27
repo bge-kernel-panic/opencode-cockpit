@@ -51,6 +51,8 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
     commands: guarded(guard, actions, [
       { name: "cockpit.review.pane.down", title: "Down", run: () => actions.move(1) },
       { name: "cockpit.review.pane.up", title: "Up", run: () => actions.move(-1) },
+      { name: "cockpit.review.pane.nextNote", title: "Next note", run: () => actions.jumpNote(1) },
+      { name: "cockpit.review.pane.previousNote", title: "Previous note", run: () => actions.jumpNote(-1) },
       { name: "cockpit.review.pane.swap", title: "Switch pane", run: () => actions.swap() },
       {
         name: "cockpit.review.pane.enter",
@@ -143,6 +145,8 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
     bindings: [
       { key: "j,down", cmd: "cockpit.review.pane.down", desc: "Down" },
       { key: "k,up", cmd: "cockpit.review.pane.up", desc: "Up" },
+      { key: "n", cmd: "cockpit.review.pane.nextNote", desc: "Next note" },
+      { key: "p", cmd: "cockpit.review.pane.previousNote", desc: "Previous note" },
       { key: "tab", cmd: "cockpit.review.pane.swap", desc: "Switch pane" },
       { key: "return,l,right", cmd: "cockpit.review.pane.enter", desc: "Open or fold" },
       { key: "d,pagedown", cmd: "cockpit.review.pane.scrollDown", desc: "Scroll down" },
@@ -151,7 +155,7 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
       { key: "shift+left,shift+h", cmd: "cockpit.review.pane.panLeft", desc: "Code left" },
       { key: "+", cmd: "cockpit.review.pane.expand", desc: "Expand context" },
       { key: "-", cmd: "cockpit.review.pane.resetContext", desc: "Reset context" },
-      { key: "c,n", cmd: "cockpit.review.pane.comment", desc: "Note, or reply" },
+      { key: "c", cmd: "cockpit.review.pane.comment", desc: "Note, or reply" },
       { key: "f", cmd: "cockpit.review.pane.commentFile", desc: "Comment on the file" },
       { key: "v", cmd: "cockpit.review.pane.select", desc: "Select lines" },
       { key: "h,left", cmd: "cockpit.review.pane.files", desc: "Back to the files" },
@@ -163,7 +167,7 @@ export function paneLayer(actions: Actions, guard: Guard): Layer {
       { key: "shift+b", cmd: "cockpit.review.pane.base", desc: "Base" },
       { key: "g", cmd: "cockpit.review.pane.reload", desc: "Reload" },
       { key: "w", cmd: "cockpit.review.pane.cycle", desc: "Width" },
-      { key: "p", cmd: "cockpit.review.pane.stats", desc: "Numbers" },
+      { key: ":,shift+;", cmd: "cockpit.review.pane.stats", desc: "Numbers" },
       { key: "s", cmd: "cockpit.review.pane.submit", desc: "Submit" },
       { key: "o", cmd: "cockpit.review.pane.open", desc: "Open in viewer" },
       { key: "?,shift+/", cmd: "cockpit.review.pane.keys", desc: "Keys" },

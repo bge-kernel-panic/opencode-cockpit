@@ -54,7 +54,8 @@ The panel takes the keyboard while it is open, and gives it straight back when i
 | <kbd>d</kbd> <kbd>u</kbd> <kbd>pgdn</kbd> <kbd>pgup</kbd> | Scroll the diff |
 | <kbd>shift</kbd>+<kbd>→</kbd> <kbd>shift</kbd>+<kbd>←</kbd> · <kbd>L</kbd> <kbd>H</kbd> | Scroll the code sideways, to read a long line to its end — or swipe sideways, or <kbd>shift</kbd>+wheel |
 | <kbd>v</kbd> | Start a selection, or cancel it |
-| <kbd>c</kbd> <kbd>n</kbd> | Comment here, or reply to the thread here |
+| <kbd>n</kbd> <kbd>p</kbd> | Next or previous note, wrapping across files |
+| <kbd>c</kbd> | Comment here, or reply to the thread here |
 | <kbd>f</kbd> | Comment on the whole file |
 | <kbd>x</kbd> | Remove the thread you are on |
 | <kbd>space</kbd> <kbd>m</kbd> | Mark read, and go to the next unread |
@@ -65,7 +66,7 @@ The panel takes the keyboard while it is open, and gives it straight back when i
 | <kbd>o</kbd> | On a changed image: open both versions in your system viewer |
 | <kbd>g</kbd> | Reload the diff |
 | <kbd>w</kbd> | Right pane or full screen |
-| <kbd>p</kbd> | Show what the panel is costing |
+| <kbd>:</kbd> | Show what the panel is costing |
 | <kbd>?</kbd> | Every key the panel takes; <kbd>esc</kbd> back |
 | <kbd>q</kbd> <kbd>esc</kbd> | Close |
 
@@ -83,7 +84,7 @@ being added to them, in this order:
 
 1. **Trouble.** Something threw. It is also written to `trouble.log` beside the review's threads, with
    the stack and what was on screen at the time.
-2. **The numbers**, if you pressed <kbd>p</kbd> — how long a frame costs, how many were dropped, how
+2. **The numbers**, if you pressed <kbd>:</kbd> — how long a frame costs, how many were dropped, how
    often the row cache hit.
 3. **The keys**, which is what you see the rest of the time.
 

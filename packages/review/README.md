@@ -40,6 +40,7 @@ its own with `review_open`, which appear in the panel beside yours.
 | `ctrl+x k` | right pane or full screen, from anywhere |
 | `tab` | move between the file list and the diff |
 | `j` / `k` | next / previous — a file on the left; on the right a line, running on into the next file |
+| `n` / `p` | next / previous note, wrapping across files |
 | `enter` | on the left: jump to a file, or fold a folder. On the right: fold or unfold this file |
 | `z` | fold or unfold the file you are in |
 | `v` | start a selection, for a note about several lines |
@@ -51,7 +52,7 @@ its own with `review_open`, which appear in the panel beside yours.
 | `b` | what is under review: uncommitted ↔ branch |
 | `B` | what the branch is compared against: its nearest parent, or one you pick |
 | `w` | half the window, or all of it |
-| `p` | what the panel is costing, in the footer |
+| `:` | what the panel is costing, in the footer |
 | `o` | open an image or other binary in your system's viewer — both versions |
 | `?` | every key, in the panel |
 | `esc` / `q` | close |
